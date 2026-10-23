@@ -1,0 +1,5 @@
+{
+  "title": "Daily Newsletter",
+  "articles_per_feed": 6,
+  "feeds": ["https://feeds.bbci.co.uk/news/world/rss.xml"]
+}
