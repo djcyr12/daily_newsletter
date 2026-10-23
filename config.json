@@ -20,5 +20,6 @@
     "longitude": -71.0589,
     "timezone": "America/New_York"
   },
-  "daily_extras": true
+  "daily_extras": true,
+  "vocabulary": {"live_dictionary": true}
 }

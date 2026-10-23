@@ -54,7 +54,7 @@ class SectionTests(unittest.TestCase):
         self.assertTrue(any('Example:' in line for line in text))
         self.assertTrue(any('Source:' in line for line in text))
         self.assertIn('A MOMENT OF PERSPECTIVE', text)
-        self.assertIn('WORD OF THE DAY', text)
+        self.assertIn('WORD OF THE DAY | LSAT READING', text)
         self.assertIn('BENEATH THE SURFACE', text)
 
     def test_full_issue_section_limits_and_pdf_extraction(self):

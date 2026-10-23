@@ -1,5 +1,9 @@
 """Weather presentation and a small, date-rotated collection of daily reading."""
 import json
+from pathlib import Path
+import sys
+import re
+import textwrap
 from urllib.parse import urlencode
 
 # Exact excerpts with attribution, rather than generated or anonymous quotations.
@@ -17,30 +21,9 @@ QUOTES = [
      'Epictetus, Enchiridion 8, trans. Elizabeth Carter'),
 ]
 
-WORDS = [
-    ('equanimity', 'ee-kwuh-NIM-ih-tee', 'noun', 'Calmness and balance under pressure.',
-     'She met the unexpected change with equanimity.'),
-    ('salubrious', 'suh-LOO-bree-us', 'adjective', 'Promoting health or well-being.',
-     'A walk along the harbor was a salubrious start to the day.'),
-    ('pellucid', 'puh-LOO-sid', 'adjective', 'Clear in meaning, expression, or appearance.',
-     'The teacher offered a pellucid explanation of the tides.'),
-    ('eudaimonia', 'yoo-dye-MOH-nee-uh', 'noun', 'Human flourishing; living well through a life of virtue.',
-     'For Aristotle, eudaimonia involves how we live, not just how we feel.'),
-    ('assiduous', 'uh-SIJ-oo-us', 'adjective', 'Showing steady care, attention, and effort.',
-     'Her assiduous practice made the difficult passage feel easy.'),
-    ('mellifluous', 'muh-LIF-loo-us', 'adjective', 'Smooth and pleasing to hear.',
-     'A mellifluous voice drifted through the open window.'),
-    ('perspicacious', 'pur-spih-KAY-shus', 'adjective', 'Quick to notice and understand things clearly.',
-     'The perspicacious observer spotted a seal among the rocks.'),
-    ('resilience', 'rih-ZIL-yuns', 'noun', 'The ability to recover or adapt after difficulty.',
-     'The community showed resilience after the storm.'),
-    ('numinous', 'NOO-mih-nus', 'adjective', 'Inspiring a sense of spiritual awe or mystery.',
-     'The vast night sky felt numinous.'),
-    ('ameliorate', 'uh-MEEL-yuh-rayt', 'verb', 'To improve a difficult or unpleasant situation.',
-     'A few thoughtful changes ameliorated the morning commute.'),
-    ('convivial', 'kun-VIV-ee-ul', 'adjective', 'Friendly, lively, and sociable.',
-     'The neighbors shared a convivial breakfast.'),
-]
+VOCABULARY = json.loads((Path(__file__).resolve().parent / 'vocabulary.json').read_text())
+WORDS = VOCABULARY['words']
+
 
 # Short educational paraphrases; source links are retained here for review.
 ANIMALS = [
@@ -73,15 +56,38 @@ ANIMALS = [
 ]
 
 
-def daily_extras(today):
+def vocabulary_lines(today, fetch=None):
+    word, part, definition, example = WORDS[today.toordinal() % len(WORDS)]
+    source = 'Definition: local study notes (offline)'
+    if fetch is not None:
+        try:
+            entries = json.loads(fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + word))
+            candidates = [meaning for entry in entries for meaning in entry['meanings']
+                          if meaning['partOfSpeech'] == part]
+            definitions = [entry['definition'] for meaning in candidates for entry in meaning['definitions']
+                           if isinstance(entry.get('definition'), str) and entry['definition'].strip()]
+            # Prefer the sense closest to the study meaning (e.g. qualify = limit a claim).
+            stopwords = {'a', 'an', 'the', 'to', 'of', 'or', 'and', 'in', 'on', 'as', 'is', 'by',
+                         'with', 'something', 'one', 's', 'for', 'that', 'it'}
+            terms = set(re.findall(r'[a-z]+', definition.lower())) - stopwords
+            definition = max(definitions, key=lambda value: len(terms & set(re.findall(r'[a-z]+', value.lower()))))
+            if not isinstance(definition, str) or not definition.strip():
+                raise ValueError('Empty dictionary definition')
+            source = 'Dictionary: Free Dictionary API (dictionaryapi.dev)'
+        except Exception as exc:
+            print(f'Dictionary unavailable for {word}: {exc}', file=sys.stderr)
+    return ['WORD OF THE DAY | LSAT READING', f'{word} | {part}',
+            textwrap.shorten(' '.join(definition.split()), width=164, placeholder='...'),
+            f'Example: {example}', source, '']
+
+
+def daily_extras(today, fetch=None):
     index = today.toordinal()
     quote, author = QUOTES[index % len(QUOTES)]
-    word, pronunciation, part, definition, example = WORDS[index % len(WORDS)]
     animal, fact, source, _ = ANIMALS[index % len(ANIMALS)]
     return [
         'A MOMENT OF PERSPECTIVE', f'"{quote}"', f'-- {author}', '',
-        'WORD OF THE DAY', f'{word} ({pronunciation}) | {part}', definition,
-        f'Example: {example}', '',
+        *vocabulary_lines(today, fetch),
         'BENEATH THE SURFACE', f'{animal}: {fact}', f'Source: {source}',
     ]
 

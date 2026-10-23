@@ -21,7 +21,7 @@ The default issue includes:
 - Three world headlines from BBC News and three Boston-area headlines from WBUR (Boston.com is a fallback), with short feed excerpts.
 - A boxed Boston weather panel with ASCII condition symbols, today's high/low in Fahrenheit, maximum precipitation probability, maximum wind speed, and sunrise/sunset. Forecast data comes from Open-Meteo, with times in America/New_York. It is a daily forecast, not live observations.
 - A positive philosophy or reflection quotation with attribution.
-- A vocabulary word, pronunciation guide, definition, and original example sentence.
+- An LSAT-focused reading/argument word, part of speech, dictionary definition, and original reasoning example.
 - An aquatic animal fact with its source organization.
 
 The default layout fits on one Letter page. Larger custom configurations paginate automatically. The compact PDF renderer uses a built-in font and replaces unsupported non-ASCII characters.
@@ -30,9 +30,13 @@ The default layout fits on one Letter page. Larger custom configurations paginat
 
 Edit `config.json`: `news_sections` controls section titles, feed URLs, and the total story `limit` per section. Feeds are tried in order until the limit is filled. `weather` controls the city label, coordinates, and timezone; set `enabled` to `false` to omit it. Set `daily_extras` to `false` to omit the three daily reading sections. Legacy configurations using `feeds` and `articles_per_feed` still work.
 
-The daily reading comes from a small, curated offline collection in `daily_sections.py`, selected deterministically by the local calendar date. Quotes repeat every 7 days, words every 11, and facts every 13; they do not require an AI service or paid API. Animal fact reference URLs are retained alongside the facts. Quotations identify the original work and translator when applicable; wording varies by translation. Definitions and examples are brief editorial explanations.
+The daily reading is selected deterministically by the local calendar date. Quotes repeat every 7 days and facts every 13. Animal fact reference URLs are retained in `daily_sections.py`; quotations identify the work and translator when applicable.
 
-Only configure trusted HTTPS feed URLs. External data requires access to `feeds.bbci.co.uk`, `www.wbur.org`, `www.boston.com`, and `api.open-meteo.com` (including any HTTPS redirect destinations). Open-Meteo's free hosted API is intended for noncommercial use; see [its terms](https://open-meteo.com/en/terms). Forecast attribution: [Open-Meteo](https://open-meteo.com/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+Vocabulary now rotates through 40 academic and argument-analysis terms in `vocabulary.json` (for example, *equivocal*, *corroborate*, *specious*, and *cogent*). This is an independently curated reading-prep list, not an official LSAC list or a transcription of a commercial prep resource. For further study, use [Magoosh's GRE vocabulary flashcards](https://gre.magoosh.com/flashcards/vocabulary); GRE academic vocabulary overlaps with challenging LSAT reading. Definitions are looked up through the [Free Dictionary API](https://dictionaryapi.dev/) for the chosen part of speech, preferring a sense that shares terms with the study definition. Dictionary entries can contain multiple senses; examples and offline study meanings remain independently written for argument-analysis practice. If lookup fails, the PDF labels the local study definition as offline. Set `vocabulary.live_dictionary` to `false` to skip lookups. No paid API or key is required.
+
+News summaries omit WordPress post credits and trailing read-more prompts, collapse HTML spacing, and avoid repeating an identical headline. Curly punctuation is converted to printable ASCII rather than question marks. Numbered stories have indented summaries and a blank line between them; source credits list only publishers that supplied a printed story.
+
+Only configure trusted HTTPS feed URLs. External data requires access to `feeds.bbci.co.uk`, `www.wbur.org`, `www.boston.com`, `api.open-meteo.com`, and `api.dictionaryapi.dev` (including any HTTPS redirect destinations). Open-Meteo's free hosted API is intended for noncommercial use; see [its terms](https://open-meteo.com/en/terms). Forecast attribution: [Open-Meteo](https://open-meteo.com/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ## Print and schedule
 

@@ -28,15 +28,58 @@ class PlainText(HTMLParser):
     def __init__(self):
         super().__init__()
         self.parts = []
+        self.hidden = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ('script', 'style'):
+            self.hidden += 1
+        elif tag in ('p', 'div', 'br', 'li'):
+            self.parts.append(' ')
+
+    def handle_endtag(self, tag):
+        if tag in ('script', 'style'):
+            self.hidden = max(0, self.hidden - 1)
+        elif tag in ('p', 'div', 'li'):
+            self.parts.append(' ')
 
     def handle_data(self, data):
-        self.parts.append(data)
+        if not self.hidden:
+            self.parts.append(data)
 
 
 def clean(value):
     parser = PlainText()
-    parser.feed(value or '')
-    return ' '.join(unescape(' '.join(parser.parts)).split())
+    parser.feed(unescape(value or ''))
+    return ' '.join(unescape(''.join(parser.parts)).split())
+
+
+def clean_summary(value, title=''):
+    value = clean(value)
+    # WordPress feeds append a second copy of the headline as a site credit.
+    value = re.sub(r'\s*The post\s+.+?\s+appeared first on\s+.+?\.?\s*$', '',
+                   value, flags=re.IGNORECASE)
+    value = re.sub(r'\s*(?:Read more|Continue reading)(?:\s*[.\u2026]+)?\s*$', '',
+                   value, flags=re.IGNORECASE).strip()
+    if title and value.casefold().startswith(title.casefold()):
+        value = value[len(title):].lstrip(' .:;-\u2014\u2013')
+    return value
+
+
+def print_text(value):
+    # Preserve typographic punctuation legibly in the PDF's ASCII font.
+    value = value.translate(str.maketrans({
+        '\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"',
+        '\u2013': '-', '\u2014': ' - ', '\u2026': '...', '\u00a0': ' ',
+    }))
+    return unicodedata.normalize('NFKD', value).encode('ascii', 'replace').decode()
+
+
+def story_lines(number, title, summary):
+    original_title = clean(title)
+    title = textwrap.shorten(print_text(original_title), width=82, placeholder='...')
+    summary = textwrap.shorten(print_text(clean_summary(summary, original_title)),
+                               width=82, placeholder='...')
+    return [f'{number}. {title}'] + (['   ' + summary] if summary else []) + ['']
 
 
 def parse_feed(raw, limit):
@@ -76,7 +119,7 @@ def pdf_bytes(lines):
     """Build a Letter PDF using the built-in Courier font."""
     wrapped = []
     for line in lines:
-        value = unicodedata.normalize('NFKD', line).encode('ascii', 'replace').decode()
+        value = print_text(line)
         wrapped.extend([value] if len(value) <= 88 else textwrap.wrap(value, width=88))
     pages = [wrapped[i:i + 60] for i in range(0, len(wrapped), 60)] or [[]]
     objects = [b'<< /Type /Catalog /Pages 2 0 R >>', b'',
@@ -138,6 +181,7 @@ def generate(config_path, output_dir):
         lines.append(str(section.get('title', 'NEWS')).upper())
         found = 0
         seen = set()
+        sources = []
         for url in feeds:
             if found >= section_limit:
                 break
@@ -150,21 +194,24 @@ def generate(config_path, output_dir):
                 if title.casefold() in seen:
                     continue
                 seen.add(title.casefold())
-                # Keep the news portion small enough for a morning printout.
-                lines.append(f'{found + 1}. {textwrap.shorten(title, width=82, placeholder="...")}')
-                if summary:
-                    lines.append('   ' + textwrap.shorten(summary, width=82, placeholder='...'))
+                lines.extend(story_lines(found + 1, title, summary))
+                host = urlparse(url).netloc
+                publisher = {'www.wbur.org': 'WBUR', 'www.boston.com': 'Boston.com',
+                             'feeds.bbci.co.uk': 'BBC News'}.get(host, host)
+                if publisher not in sources:
+                    sources.append(publisher)
                 found += 1
                 if found >= section_limit:
                     break
-        lines.extend([f'Sources: {", ".join(urlparse(url).netloc for url in feeds)}', ''])
+        lines.extend(([f'Sources: {", ".join(sources)}'] if sources else []) + [''])
         if not found:
-            lines.insert(len(lines) - 2, 'News unavailable from this section today.')
+            lines.insert(len(lines) - 1, 'News unavailable from this section today.')
         count += found
     if not count:
         raise ValueError('No articles retrieved; nothing generated or printed')
     if config.get('daily_extras', False):
-        lines.extend(daily_extras(today))
+        lookup = fetch_bytes if config.get('vocabulary', {}).get('live_dictionary', True) else None
+        lines.extend(daily_extras(today, lookup))
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f'newsletter-{date.today().isoformat()}.pdf'
     temporary = path.with_suffix('.pdf.tmp')
