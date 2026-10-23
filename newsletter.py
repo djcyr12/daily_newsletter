@@ -17,6 +17,8 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
+from daily_sections import daily_extras, weather_lines
+
 ROOT = Path(__file__).resolve().parent
 DATA = Path.home() / 'Library/Application Support/DailyNewsletter'
 LABEL = 'local.daily-newsletter'
@@ -54,7 +56,7 @@ def parse_feed(raw, limit):
     return articles
 
 
-def fetch_feed(url, limit):
+def fetch_bytes(url):
     if urlparse(url).scheme != 'https':
         raise ValueError('Feed URLs must use HTTPS')
     with urlopen(Request(url, headers={'User-Agent': 'DailyNewsletter/1.0'}), timeout=25) as response:
@@ -63,7 +65,11 @@ def fetch_feed(url, limit):
         raw = response.read(2_000_001)
     if len(raw) > 2_000_000:
         raise ValueError('Feed exceeds 2 MB limit')
-    return parse_feed(raw, limit)
+    return raw
+
+
+def fetch_feed(url, limit):
+    return parse_feed(fetch_bytes(url), limit)
 
 
 def pdf_bytes(lines):
@@ -71,8 +77,8 @@ def pdf_bytes(lines):
     wrapped = []
     for line in lines:
         value = unicodedata.normalize('NFKD', line).encode('ascii', 'replace').decode()
-        wrapped.extend(textwrap.wrap(value, width=88) or [''])
-    pages = [wrapped[i:i + 48] for i in range(0, len(wrapped), 48)] or [[]]
+        wrapped.extend([value] if len(value) <= 88 else textwrap.wrap(value, width=88))
+    pages = [wrapped[i:i + 60] for i in range(0, len(wrapped), 60)] or [[]]
     objects = [b'<< /Type /Catalog /Pages 2 0 R >>', b'',
                b'<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>']
     kids = []
@@ -81,7 +87,7 @@ def pdf_bytes(lines):
         kids.append(f'{number} 0 R')
         objects.append((f'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] '
                         f'/Resources << /Font << /F1 3 0 R >> >> /Contents {number + 1} 0 R >>').encode())
-        commands = ['BT /F1 10 Tf 12 TL 42 744 Td']
+        commands = ['BT /F1 10 Tf 11 TL 42 744 Td']
         for line in page:
             escaped = re.sub(r'([\\()])', r'\\\1', line)
             commands.append(f'({escaped}) Tj T*')
@@ -107,24 +113,58 @@ def generate(config_path, output_dir):
     limit = config.get('articles_per_feed', 6)
     if not isinstance(limit, int) or not 1 <= limit <= 30:
         raise ValueError('articles_per_feed must be between 1 and 30')
-    feeds = config.get('feeds', [])
-    if not isinstance(feeds, list) or not feeds or len(feeds) > 20:
-        raise ValueError('Configure between 1 and 20 feed URLs')
-    lines = [str(config.get('title', 'Daily Newsletter')), date.today().isoformat(), '']
-    count = 0
-    for url in feeds:
+    sections = config.get('news_sections')
+    if sections is None:  # Preserve existing user configurations.
+        sections = [{'title': 'NEWS', 'feeds': config.get('feeds', []), 'limit': limit}]
+    if not isinstance(sections, list) or not 1 <= len(sections) <= 10:
+        raise ValueError('Configure between 1 and 10 news sections')
+    today = date.today()
+    lines = [str(config.get('title', 'Daily Newsletter')).upper(),
+             today.strftime('%A, %B %d, %Y'), '=' * 88, '']
+    if config.get('weather', {}).get('enabled', False):
         try:
-            articles = fetch_feed(url, limit)
+            lines.extend(weather_lines(config['weather'], fetch_bytes, today))
         except Exception as exc:
-            print(f'Feed unavailable ({url}): {exc}', file=sys.stderr)
-            continue
-        if articles:
-            lines.extend([url, ''])
-        for title, summary in articles:
-            lines.extend([title, summary, ''])
-            count += 1
+            print(f'Weather unavailable: {exc}', file=sys.stderr)
+            lines.extend(['BOSTON WEATHER | Forecast unavailable; check a current forecast.', ''])
+    count = 0
+    for section in sections:
+        feeds = section.get('feeds', [])
+        section_limit = section.get('limit', limit)
+        if not isinstance(section_limit, int) or not 1 <= section_limit <= 30:
+            raise ValueError('News section limit must be between 1 and 30')
+        if not isinstance(feeds, list) or not 1 <= len(feeds) <= 20:
+            raise ValueError('Configure between 1 and 20 feed URLs per section')
+        lines.append(str(section.get('title', 'NEWS')).upper())
+        found = 0
+        seen = set()
+        for url in feeds:
+            if found >= section_limit:
+                break
+            try:
+                articles = fetch_feed(url, section_limit)
+            except Exception as exc:
+                print(f'Feed unavailable ({url}): {exc}', file=sys.stderr)
+                continue
+            for title, summary in articles:
+                if title.casefold() in seen:
+                    continue
+                seen.add(title.casefold())
+                # Keep the news portion small enough for a morning printout.
+                lines.append(f'{found + 1}. {textwrap.shorten(title, width=82, placeholder="...")}')
+                if summary:
+                    lines.append('   ' + textwrap.shorten(summary, width=82, placeholder='...'))
+                found += 1
+                if found >= section_limit:
+                    break
+        lines.extend([f'Sources: {", ".join(urlparse(url).netloc for url in feeds)}', ''])
+        if not found:
+            lines.insert(len(lines) - 2, 'News unavailable from this section today.')
+        count += found
     if not count:
         raise ValueError('No articles retrieved; nothing generated or printed')
+    if config.get('daily_extras', False):
+        lines.extend(daily_extras(today))
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f'newsletter-{date.today().isoformat()}.pdf'
     temporary = path.with_suffix('.pdf.tmp')

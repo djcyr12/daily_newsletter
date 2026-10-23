@@ -20,11 +20,11 @@ class NewsletterTests(unittest.TestCase):
 
     def test_pdf_pagination_and_offsets(self):
         pdf = n.pdf_bytes(['A (story) \\ headline'] * 100)
-        self.assertIn(b'/Count 3', pdf)
+        self.assertIn(b'/Count 2', pdf)
         self.assertIn(b'A \\(story\\) \\\\ headline', pdf)
         xref = int(pdf.split(b'startxref\n')[1].splitlines()[0])
         self.assertEqual(pdf[xref:xref+4], b'xref')
-        offsets = pdf[xref:].splitlines()[3:12]
+        offsets = pdf[xref:].splitlines()[3:10]
         for number, entry in enumerate(offsets, 1):
             offset = int(entry.split()[0])
             self.assertTrue(pdf[offset:].startswith(f'{number} 0 obj'.encode()))

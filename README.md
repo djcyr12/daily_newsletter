@@ -16,7 +16,23 @@ python3 newsletter.py generate
 open "$HOME/Library/Application Support/DailyNewsletter/newsletter-$(date +%F).pdf"
 ```
 
-The default newsletter has six BBC World News headlines and feed summaries. Edit `config.json` to change the title, HTTPS RSS/Atom feeds, and articles per feed (1–30). Only configure trusted feed URLs. The compact PDF renderer uses a built-in font and replaces unsupported non-ASCII characters. Issues contain feed excerpts, not full articles.
+The default issue includes:
+
+- Three world headlines from BBC News and three Boston-area headlines from WBUR (Boston.com is a fallback), with short feed excerpts.
+- A boxed Boston weather panel with ASCII condition symbols, today's high/low in Fahrenheit, maximum precipitation probability, maximum wind speed, and sunrise/sunset. Forecast data comes from Open-Meteo, with times in America/New_York. It is a daily forecast, not live observations.
+- A positive philosophy or reflection quotation with attribution.
+- A vocabulary word, pronunciation guide, definition, and original example sentence.
+- An aquatic animal fact with its source organization.
+
+The default layout fits on one Letter page. Larger custom configurations paginate automatically. The compact PDF renderer uses a built-in font and replaces unsupported non-ASCII characters.
+
+### Customize your issue
+
+Edit `config.json`: `news_sections` controls section titles, feed URLs, and the total story `limit` per section. Feeds are tried in order until the limit is filled. `weather` controls the city label, coordinates, and timezone; set `enabled` to `false` to omit it. Set `daily_extras` to `false` to omit the three daily reading sections. Legacy configurations using `feeds` and `articles_per_feed` still work.
+
+The daily reading comes from a small, curated offline collection in `daily_sections.py`, selected deterministically by the local calendar date. Quotes repeat every 7 days, words every 11, and facts every 13; they do not require an AI service or paid API. Animal fact reference URLs are retained alongside the facts. Quotations identify the original work and translator when applicable; wording varies by translation. Definitions and examples are brief editorial explanations.
+
+Only configure trusted HTTPS feed URLs. External data requires access to `feeds.bbci.co.uk`, `www.wbur.org`, `www.boston.com`, and `api.open-meteo.com` (including any HTTPS redirect destinations). Open-Meteo's free hosted API is intended for noncommercial use; see [its terms](https://open-meteo.com/en/terms). Forecast attribution: [Open-Meteo](https://open-meteo.com/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ## Print and schedule
 
@@ -37,7 +53,7 @@ PDFs, submission records, and schedule logs are stored in `~/Library/Application
 python3 newsletter.py unschedule
 ```
 
-Unavailable feeds are reported and skipped. If no articles are retrieved, the app fails without printing; there is no automatic retry that day. HTTPS certificate verification remains enabled. This cloud workspace cannot directly reach your home printer: printing and scheduling commands must run on your Mac.
+Unavailable feeds are reported and skipped, and empty sections are marked unavailable. If no articles are retrieved from any section, the app fails without printing; there is no automatic retry that day. Weather failures produce an explicit unavailable message instead of a made-up or stale forecast. HTTPS certificate verification remains enabled. This cloud workspace cannot directly reach your home printer: printing and scheduling commands must run on your Mac.
 
 ## Development
 
