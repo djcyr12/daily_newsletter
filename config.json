@@ -1,5 +1,24 @@
 {
   "title": "Daily Newsletter",
-  "articles_per_feed": 6,
-  "feeds": ["https://feeds.bbci.co.uk/news/world/rss.xml"]
+  "articles_per_feed": 3,
+  "news_sections": [
+    {
+      "title": "Around the world",
+      "limit": 3,
+      "feeds": ["https://feeds.bbci.co.uk/news/world/rss.xml"]
+    },
+    {
+      "title": "Boston & nearby",
+      "limit": 3,
+      "feeds": ["https://www.wbur.org/feed/news", "https://www.boston.com/feed/"]
+    }
+  ],
+  "weather": {
+    "enabled": true,
+    "location": "Boston, MA",
+    "latitude": 42.3601,
+    "longitude": -71.0589,
+    "timezone": "America/New_York"
+  },
+  "daily_extras": true
 }
